@@ -1,74 +1,38 @@
-import json
-import logging
-import os
-from datetime import datetime
-from pathlib import Path
 from django.db import IntegrityError
 from django.utils.dateparse import parse_datetime
 from rest_framework.response import Response
 from rest_framework import status
-from ..models import Conversation, Message
-
-
-# Configurar logging estruturado
-LOG_DIR = Path(__file__).resolve().parent.parent.parent.parent / "logs"
-LOG_DIR.mkdir(exist_ok=True)
-LOG_FILE = LOG_DIR / "webhook.log"
-
-# Configurar logger
-logger = logging.getLogger("webhook_service")
-logger.setLevel(logging.INFO)
-
-# Handler para arquivo
-file_handler = logging.FileHandler(LOG_FILE)
-file_handler.setLevel(logging.INFO)
-
-# Handler para console
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-
-# Formato JSON estruturado
-class JSONFormatter(logging.Formatter):
-    def format(self, record):
-        log_data = {
-            "event": getattr(record, "event", "UNKNOWN"),
-            "conversation_id": getattr(record, "conversation_id", None),
-            "status": getattr(record, "status", "error"),
-            "timestamp": datetime.utcnow().isoformat(),
-            "message": record.getMessage(),
-        }
-        return json.dumps(log_data)
-
-formatter = JSONFormatter()
-file_handler.setFormatter(formatter)
-console_handler.setFormatter(formatter)
-
-logger.addHandler(file_handler)
-logger.addHandler(console_handler)
+from ..models import Conversation, Message, WebhookLog
 
 
 class WebhookService:
     @staticmethod
     def _parse_timestamp(timestamp_value):
         """Parse timestamp string para datetime."""
+        from datetime import datetime
         if isinstance(timestamp_value, datetime):
             return timestamp_value
         if isinstance(timestamp_value, str):
             dt = parse_datetime(timestamp_value)
             if dt is None:
-                raise ValueError(f"Invalid timestamp format: {timestamp_value}")
+                raise ValueError(f"Formato de timestamp inválido: {timestamp_value}")
             return dt
-        raise ValueError(f"Invalid timestamp type: {type(timestamp_value)}")
+        raise ValueError(f"Tipo de timestamp inválido: {type(timestamp_value)}")
 
     @staticmethod
     def _log_event(event_type, conversation_id=None, status_value="success", message=""):
-        """Registra log estruturado."""
-        extra = {
-            "event": event_type,
-            "conversation_id": str(conversation_id) if conversation_id else None,
-            "status": status_value,
-        }
-        logger.info(message, extra=extra)
+        """Registra log estruturado no banco de dados."""
+        try:
+            WebhookLog.objects.create(
+                event=event_type,
+                conversation_id=conversation_id,
+                status=status_value,
+                message=message
+            )
+        except Exception as e:
+            # Se falhar ao salvar log, não quebra o fluxo principal
+            # Apenas imprime no console como fallback
+            print(f"Erro ao salvar log: {str(e)}")
 
     @staticmethod
     def process_event(event_data):
@@ -86,8 +50,11 @@ class WebhookService:
         timestamp = event_data.get("timestamp")
 
         if not event_type:
-            WebhookService._log_event("UNKNOWN", status_value="error", message="Event type missing")
-            return Response({"error": "Event type is required"}, status=status.HTTP_400_BAD_REQUEST)
+            WebhookService._log_event("UNKNOWN", status_value="error", message="Tipo de evento ausente")
+            return Response(
+                {"success": False, "description": "O tipo de evento é obrigatório"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             if event_type == "NEW_CONVERSATION":
@@ -103,33 +70,62 @@ class WebhookService:
                 WebhookService._log_event(
                     event_type, 
                     status_value="error", 
-                    message=f"Unknown event type: {event_type}"
+                    message=f"Tipo de evento desconhecido: {event_type}"
                 )
                 return Response(
-                    {"error": f"Unknown event type: {event_type}"}, 
+                    {"success": False, "description": f"Tipo de evento desconhecido: {event_type}"}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
         except IntegrityError as e:
             conversation_id = data.get("id") or data.get("conversation_id")
+            error_message = str(e)
+            
+            # Mapear erros de integridade específicos
+            if "UNIQUE constraint" in error_message or "duplicate key" in error_message.lower():
+                description = "ID duplicado detectado. O ID já existe no banco de dados."
+            elif "FOREIGN KEY constraint" in error_message:
+                description = "Violação de chave estrangeira. O recurso referenciado não existe."
+            elif "NOT NULL constraint" in error_message:
+                description = "Campo obrigatório ausente ou nulo."
+            else:
+                description = f"Erro de integridade do banco de dados: {error_message}"
+            
             WebhookService._log_event(
                 event_type, 
                 conversation_id=conversation_id,
                 status_value="error", 
-                message=f"Duplicate ID: {str(e)}"
+                message=f"IntegrityError: {error_message}"
             )
-            return Response({"error": "Duplicate ID"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"success": False, "description": description}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         except KeyError as e:
+            conversation_id = data.get("id") or data.get("conversation_id")
+            missing_field = str(e).strip("'\"")
+            WebhookService._log_event(
+                event_type,
+                conversation_id=conversation_id,
+                status_value="error",
+                message=f"Campo obrigatório ausente: {missing_field}"
+            )
+            return Response(
+                {"success": False, "description": f"Campo obrigatório ausente: {missing_field}"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        except ValueError as e:
             conversation_id = data.get("id") or data.get("conversation_id")
             WebhookService._log_event(
                 event_type,
                 conversation_id=conversation_id,
                 status_value="error",
-                message=f"Missing required field: {str(e)}"
+                message=f"Valor inválido: {str(e)}"
             )
             return Response(
-                {"error": f"Missing required field: {str(e)}"}, 
+                {"success": False, "description": f"Valor inválido: {str(e)}"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -139,9 +135,13 @@ class WebhookService:
                 event_type,
                 conversation_id=conversation_id,
                 status_value="error",
-                message=f"Unexpected error: {str(e)}"
+                message=f"Erro inesperado: {str(e)}"
             )
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            # Retornar 400 ao invés de 500 para evitar erros não tratados
+            return Response(
+                {"success": False, "description": f"Ocorreu um erro ao processar a requisição: {str(e)}"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
     @staticmethod
     def _handle_new_conversation(data):
@@ -154,17 +154,17 @@ class WebhookService:
                 "NEW_CONVERSATION",
                 conversation_id=conversation_id,
                 status_value="success",
-                message=f"Conversation {conversation_id} created successfully"
+                message=f"Conversa {conversation_id} criada com sucesso"
             )
         else:
             WebhookService._log_event(
                 "NEW_CONVERSATION",
                 conversation_id=conversation_id,
                 status_value="success",
-                message=f"Conversation {conversation_id} already exists"
+                message=f"Conversa {conversation_id} já existe"
             )
         
-        return Response({"success": True}, status=status.HTTP_201_CREATED)
+        return Response({"success": True, "message": "Conversa processada com sucesso"}, status=status.HTTP_201_CREATED)
 
     @staticmethod
     def _handle_close_conversation(data):
@@ -177,10 +177,10 @@ class WebhookService:
                 "CLOSE_CONVERSATION",
                 conversation_id=conversation_id,
                 status_value="error",
-                message=f"Conversation {conversation_id} not found"
+                message=f"Conversa {conversation_id} não encontrada"
             )
             return Response(
-                {"error": "Conversation not found"}, 
+                {"success": False, "description": f"Conversa com ID {conversation_id} não encontrada"}, 
                 status=status.HTTP_404_NOT_FOUND
             )
         
@@ -191,10 +191,10 @@ class WebhookService:
             "CLOSE_CONVERSATION",
             conversation_id=conversation_id,
             status_value="success",
-            message=f"Conversation {conversation_id} closed successfully"
+            message=f"Conversa {conversation_id} fechada com sucesso"
         )
         
-        return Response({"success": True}, status=status.HTTP_200_OK)
+        return Response({"success": True, "message": "Conversa fechada com sucesso"}, status=status.HTTP_200_OK)
 
     @staticmethod
     def _handle_new_message(data, timestamp):
@@ -211,10 +211,10 @@ class WebhookService:
                 "NEW_MESSAGE",
                 conversation_id=conversation_id,
                 status_value="error",
-                message=f"Conversation {conversation_id} not found"
+                message=f"Conversa {conversation_id} não encontrada"
             )
             return Response(
-                {"error": "Conversation not found"}, 
+                {"success": False, "description": f"Conversa com ID {conversation_id} não encontrada"}, 
                 status=status.HTTP_404_NOT_FOUND
             )
         
@@ -223,10 +223,10 @@ class WebhookService:
                 "NEW_MESSAGE",
                 conversation_id=conversation_id,
                 status_value="error",
-                message=f"Cannot add message to closed conversation {conversation_id}"
+                message=f"Não é possível adicionar mensagem à conversa fechada {conversation_id}"
             )
             return Response(
-                {"error": "Conversation closed"}, 
+                {"success": False, "description": f"Não é possível adicionar mensagem à conversa fechada {conversation_id}"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -244,8 +244,8 @@ class WebhookService:
             "NEW_MESSAGE",
             conversation_id=conversation_id,
             status_value="success",
-            message=f"Message {message_id} created successfully in conversation {conversation_id}"
+            message=f"Mensagem {message_id} criada com sucesso na conversa {conversation_id}"
         )
         
-        return Response({"success": True}, status=status.HTTP_201_CREATED)
+        return Response({"success": True, "message": "Mensagem criada com sucesso"}, status=status.HTTP_201_CREATED)
 

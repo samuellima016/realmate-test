@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
+import CreateMessage from './CreateMessage';
 import './ConversationDetail.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
@@ -22,10 +23,33 @@ function ConversationDetail() {
       const response = await axios.get(`${API_BASE_URL}/conversations/${id}/`);
       setConversation(response.data);
     } catch (err) {
-      setError(err.response?.data?.error || 'Erro ao carregar conversa');
+      setError(err.response?.data?.description || err.response?.data?.error || 'Erro ao carregar conversa');
       console.error('Erro ao buscar conversa:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCloseConversation = async () => {
+    if (!window.confirm('Tem certeza que deseja fechar esta conversa?')) {
+      return;
+    }
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/webhook/`, {
+        type: 'CLOSE_CONVERSATION',
+        data: {
+          id: id
+        }
+      });
+
+      if (response.data.success) {
+        fetchConversation();
+      } else {
+        alert(response.data.description || 'Erro ao fechar conversa');
+      }
+    } catch (err) {
+      alert(err.response?.data?.description || 'Erro ao fechar conversa');
     }
   };
 
@@ -87,13 +111,30 @@ function ConversationDetail() {
         <div className="conversation-info">
           <h2>Conversa {conversation.id}</h2>
           <span className={`status-badge status-${conversation.status.toLowerCase()}`}>
-            {conversation.status}
+            {conversation.status === 'OPEN' ? 'Aberta' : 'Fechada'}
           </span>
         </div>
-        <button className="button" onClick={fetchConversation}>
-          Atualizar
-        </button>
+        <div className="header-actions">
+          {conversation.status === 'OPEN' && (
+            <button 
+              className="button-danger" 
+              onClick={handleCloseConversation}
+            >
+              Fechar Conversa
+            </button>
+          )}
+          <button className="button-secondary" onClick={fetchConversation}>
+            Atualizar
+          </button>
+        </div>
       </div>
+
+      {conversation.status === 'OPEN' && (
+        <CreateMessage 
+          conversationId={conversation.id} 
+          onSuccess={fetchConversation}
+        />
+      )}
 
       <div className="messages-container">
         {messages.length === 0 ? (
@@ -113,6 +154,7 @@ function ConversationDetail() {
                 <span className="message-direction">
                   {message.direction === 'SENT' ? '📤 Enviada' : '📥 Recebida'}
                 </span>
+                <span className="message-id">ID: {message.id}</span>
                 <span className="message-timestamp">
                   {formatTimestamp(message.timestamp)}
                 </span>

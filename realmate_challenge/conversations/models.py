@@ -3,8 +3,8 @@ from django.db import models
 
 class Conversation(models.Model):
     STATUS_CHOICES = [
-        ("OPEN", "Open"),
-        ("CLOSED", "Closed"),
+        ("OPEN", "Aberta"),
+        ("CLOSED", "Fechada"),
     ]
 
     id = models.UUIDField(primary_key=True)
@@ -13,13 +13,13 @@ class Conversation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Conversation {self.id} ({self.status})"
+        return f"Conversa {self.id} ({self.status})"
 
 
 class Message(models.Model):
     DIRECTION_CHOICES = [
-        ("SENT", "Sent"),
-        ("RECEIVED", "Received"),
+        ("SENT", "Enviada"),
+        ("RECEIVED", "Recebida"),
     ]
 
     id = models.UUIDField(primary_key=True)
@@ -29,6 +29,23 @@ class Message(models.Model):
     timestamp = models.DateTimeField()
 
     def __str__(self):
-        return f"Message {self.id} ({self.direction})"
+        return f"Mensagem {self.id} ({self.direction})"
+
+
+class WebhookLog(models.Model):
+    """Modelo para armazenar logs de eventos do webhook."""
+    event = models.CharField(max_length=50)
+    conversation_id = models.UUIDField(null=True, blank=True)
+    status = models.CharField(max_length=20, default="error")
+    message = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = "Log do Webhook"
+        verbose_name_plural = "Logs do Webhook"
+
+    def __str__(self):
+        return f"{self.event} - {self.status} - {self.timestamp}"
 
 
