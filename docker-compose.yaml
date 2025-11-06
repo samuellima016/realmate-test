@@ -1,0 +1,50 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    container_name: realmate-test-web
+    command: >
+      sh -c "poetry run python manage.py wait_for_db &&
+             poetry run python manage.py makemigrations --noinput &&
+             poetry run python manage.py migrate --noinput &&
+             poetry run python manage.py runserver 0.0.0.0:80"
+    ports:
+      - "8080:80"
+    depends_on:
+      - db
+    environment:
+      - DJANGO_SETTINGS_MODULE=realmate_challenge.settings
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/realmate_db
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+
+  frontend:
+    build: ./frontend
+    container_name: realmate-test-frontend
+    ports:
+      - "8000:8000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    stdin_open: true
+    tty: true
+
+  db:
+    image: postgres:16
+    container_name: realmate-test-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: realmate_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+
+volumes:
+  postgres_data:
