@@ -1,0 +1,114 @@
+.conversation-detail {
+  width: 100%;
+}
+
+.conversation-detail-header {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-bottom: 24px;
+}
+
+.back-link {
+  color: #007bff;
+  text-decoration: none;
+  font-size: 14px;
+  margin-bottom: 12px;
+  display: inline-block;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.conversation-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.conversation-info h2 {
+  font-size: 24px;
+  color: #333;
+  font-family: 'Courier New', monospace;
+  word-break: break-all;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-open {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status-closed {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.messages-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 20px;
+  min-height: 400px;
+}
+
+.empty-messages {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+}
+
+.message {
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  border-left: 4px solid;
+}
+
+.message-sent {
+  background-color: #e7f3ff;
+  border-left-color: #007bff;
+  margin-left: 20%;
+}
+
+.message-received {
+  background-color: #f5f5f5;
+  border-left-color: #6c757d;
+  margin-right: 20%;
+}
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #666;
+}
+
+.message-direction {
+  font-weight: 600;
+}
+
+.message-timestamp {
+  font-family: 'Courier New', monospace;
+}
+
+.message-content {
+  font-size: 15px;
+  line-height: 1.5;
+  color: #333;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
