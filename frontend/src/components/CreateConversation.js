@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import './CreateConversation.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:80';
 
 function CreateConversation({ onSuccess, onCancel }) {
   const [conversationId, setConversationId] = useState('');

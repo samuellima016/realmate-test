@@ -12,13 +12,13 @@ docker compose up --build
 
 Isso irá:
 1. Construir e iniciar o banco PostgreSQL (porta 5432)
-2. Construir e iniciar o backend Django (porta 8080)
+2. Construir e iniciar o backend Django (porta 80)
 3. Construir e iniciar o frontend React (porta 8000)
 4. Aplicar migrações automaticamente
 
 ### Acessar as aplicações
 - **Frontend React**: http://localhost:8000
-- **Backend API**: http://localhost:8080
+- **Backend API**: http://localhost:80
 - **Banco PostgreSQL**: localhost:5432
 
 ## Estrutura do Projeto
@@ -46,19 +46,19 @@ frontend/
 
 ### Webhook (POST)
 ```bash
-curl -X POST http://localhost:8080/webhook/ \
+curl -X POST http://localhost:80/webhook/ \
 -H "Content-Type: application/json" \
 -d '{"type": "NEW_CONVERSATION", "timestamp": "2025-02-21T10:20:41.349308", "data": {"id": "6a41b347-8d80-4ce9-84ba-7af66f369f6a"}}'
 ```
 
 ### Listar conversas (GET)
 ```bash
-curl http://localhost:8080/conversations/
+curl http://localhost:80/conversations/
 ```
 
 ### Detalhes da conversa (GET)
 ```bash
-curl http://localhost:8080/conversations/6a41b347-8d80-4ce9-84ba-7af66f369f6a/
+curl http://localhost:80/conversations/6a41b347-8d80-4ce9-84ba-7af66f369f6a/
 ```
 
 #### Formato dos Webhooks
@@ -159,7 +159,13 @@ Os eventos virão no seguinte formato:
 
 ## Logs
 
-Os logs estruturados são salvos em `logs/webhook.log` no formato JSON:
+Os logs estruturados são salvos em duas formas:
+
+1. **Tabela do banco de dados**: Os logs são armazenados na tabela `WebhookLog` no PostgreSQL, permitindo consultas e análises estruturadas.
+
+2. **Arquivo de log** (opcional): Os logs também podem ser salvos em `logs/webhook.log` no formato JSON.
+
+Formato dos logs:
 
 ```json
 {
@@ -167,9 +173,11 @@ Os logs estruturados são salvos em `logs/webhook.log` no formato JSON:
   "conversation_id": "6a41b347-8d80-4ce9-84ba-7af66f369f6a",
   "status": "success",
   "timestamp": "2025-11-05T10:06:00",
-  "message": "Message created successfully"
+  "message": "Mensagem criada com sucesso na conversa 6a41b347-8d80-4ce9-84ba-7af66f369f6a"
 }
 ```
+
+Os logs podem ser visualizados e gerenciados através do Django Admin em `http://localhost:80/admin/`.
 
 ## Frontend
 

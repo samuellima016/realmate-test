@@ -4,7 +4,7 @@ import axios from 'axios';
 import CreateConversation from './CreateConversation';
 import './ConversationList.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:80';
 
 function ConversationList() {
   const [conversations, setConversations] = useState([]);
